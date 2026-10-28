@@ -1,0 +1,15 @@
+# my guide (kept on this computer only)
+vector-lander-guide.html
+
+# pygbag web builds
+/build
+
+# Python
+__pycache__/
+*.pyc
+
+# saved high score
+highscore.txt
+
+scribe.py
+
