@@ -19,7 +19,9 @@ THRUST = 48.0
 START_FUEL = 1000.0
 FUEL_PER_SECOND = 70.0
 
-
+TERRAIN_STEP = 40 # terrain resolution
+AVERAGE_HEIGHT = 500
+HEIGHT_RANGE = 80
 
 LANDER_PIECES = [
     # hull: up the left side, round the ogive nose, down the right side
@@ -47,11 +49,63 @@ LANDER_PIECES = [
     [(8, 32), (12, 32)],  # right foot
 ]
 
+def make_terrain():
+    point_count = SCREEN_WIDTH // TERRAIN_STEP + 1
+    heights = []
+    height = random.uniform ((AVERAGE_HEIGHT - HEIGHT_RANGE), (AVERAGE_HEIGHT + HEIGHT_RANGE))
+    for index in range(point_count):
+        height += random.uniform(-(HEIGHT_RANGE // 2), (HEIGHT_RANGE // 2))
+        height = max(330, min(570, height))
+        heights.append(height)
+
+        #landing pads
+    pad_sizes = [(3, 2), (2, 3), (1, 5)]
+    random.shuffle(pad_sizes)
+    pads = []
+    zone_width = point_count // len(pad_sizes)  # one pad in each third of the screen
+    for zone, (steps, multiplier) in enumerate(pad_sizes):
+        start = zone * zone_width + random.randint(1, max(1, zone_width - steps - 2))
+        pad_height = heights[start]
+        for index in range(start, start + steps + 1):
+            heights[index] = pad_height  # flatten it
+        pads.append({
+            'left': start * TERRAIN_STEP,
+            'right': (start + steps) * TERRAIN_STEP,
+            'height': pad_height,
+            'multiplier': multiplier,
+        })
+
+    points = [(index * TERRAIN_STEP, heights[index]) for index in range(point_count)]
+    return points, pads
+
+def draw_terrain(surface, points, pads, font):
+    pygame.draw.lines(surface, GREEN, False, points, 2)
+    for pad in pads:
+        pygame.draw.line(surface, GREEN, (pad['left'], pad['height']), (pad['right'], pad['height']), 5)
+        label = font.render(f"x{pad['multiplier']}", True, GREEN)
+        surface.blit(label, ((pad['left'] + pad['right']) / 2 - label.get_width() / 2, pad['height'] + 8))
+            
+def ground_height_at(points, x):
+    """The terrain's screen y at any x, between the points (linear interpolation)."""
+    x = max(0, min(SCREEN_WIDTH, x))
+    index = min(int(x // TERRAIN_STEP), len(points) - 2)
+    left_x, left_height = points[index]
+    right_x, right_height = points[index + 1]
+    how_far_along = (x - left_x) / (right_x - left_x)
+    return left_height + (right_height - left_height) * how_far_along
+
+
+def pad_under(pads, x):
+    """The pad at this x, or None."""
+    for pad in pads:
+        if pad['left'] <= x <= pad['right']:
+            return pad
+    return None
 
 # draws lines between points
 def draw_lander(surface, lander):
     for shape in LANDER_PIECES:
-        pygame.draw.lines(surface, GREEN, False, [place_point(point, lander) for point in shape], 2)
+        pygame.draw.lines(surface, GREEN, False, [place_point(point, lander) for point in shape], 1)
     if lander['thrusting']:
         flame_length = random.uniform(5,15)
         flame1 = [(-6, 30), (-5, 30 + flame_length), (0, 30)]
@@ -111,17 +165,19 @@ def update_lander(lander, keys, dt):
     lander['x'] %= SCREEN_WIDTH
     lander['y'] %= SCREEN_HEIGHT
 
-    print(lander['fuel'])
     
     
 
 async def main():
     pygame.init()
+    random.seed(1)  # same terrain every run, for testing - delete for the real game
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption('VectorLander64')
     clock = pygame.time.Clock()
 
-    lander = new_lander(1000)
+    small_font = pygame.font.Font(None, 26)
+    points, pads = make_terrain()
+    lander = new_lander(START_FUEL)
     running = True
     while running: 
         dt = min(clock.tick(FRAMES_PER_SECOND) / 1000, 0.05)
@@ -129,12 +185,19 @@ async def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            # R for testing: new terrain and a new lander
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+                points, pads = make_terrain()
+                lander = new_lander(START_FUEL)
 
         keys = pygame.key.get_pressed()
         update_lander(lander, keys, dt)
 
         screen.fill(BLACK)
+        draw_terrain(screen, points, pads, small_font)
         draw_lander(screen, lander)
+        fuel_text = small_font.render(f"FUEL {lander['fuel']:.0f}", True, GREEN)
+        screen.blit(fuel_text, (20, 20))
         pygame.display.flip()
         
         await asyncio.sleep(0)
