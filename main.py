@@ -12,6 +12,12 @@ WHITE = (255, 255, 255)
 GREEN = (0, 255, 0)
 FRAMES_PER_SECOND = 120
 TURN_SPEED = 120  # degrees per second
+GRAVITY = 20.0  # pixels per second per second, pulling down
+THRUST = 48.0
+
+START_FUEL = 1000.0
+FUEL_PER_SECOND = 70.0
+
 
 LANDER_PIECES = [
     # hull: up the left side, round the ogive nose, down the right side
@@ -44,6 +50,7 @@ LANDER_PIECES = [
 def draw_lander(surface, lander):
     for shape in LANDER_PIECES:
         pygame.draw.lines(surface, GREEN, False, [place_point(point, lander) for point in shape], 2)
+        
 
 #rotates lander around (0, 0)
 def rotate_point(x, y, angle_degrees):
@@ -71,10 +78,35 @@ def new_lander(fuel):
     }
 
 def update_lander(lander, keys, dt):
+    
     if keys[pygame.K_LEFT]:
         lander['angle'] -= TURN_SPEED * dt
     if keys[pygame.K_RIGHT]:
         lander['angle'] += TURN_SPEED * dt
+
+    lander['thrusting'] = keys[pygame.K_UP] and lander['fuel'] > 0
+    acceleration_x = 0.0
+    acceleration_y = GRAVITY
+    if lander['thrusting']:
+        
+        nose_x, nose_y = rotate_point(0, -1, lander['angle'])
+        acceleration_x += nose_x * THRUST
+        acceleration_y += nose_y * THRUST
+        lander['fuel'] = max(0.0, lander['fuel'] - FUEL_PER_SECOND * dt)
+
+    
+    lander['speed_x'] += acceleration_x * dt
+    lander['speed_y'] += acceleration_y * dt
+    lander['x'] += lander['speed_x'] * dt
+    lander['y'] += lander['speed_y'] * dt
+
+    
+    lander['x'] %= SCREEN_WIDTH
+    lander['y'] %= SCREEN_HEIGHT
+
+    print(lander['fuel'])
+    
+    
 
 async def main():
     pygame.init()
@@ -97,6 +129,7 @@ async def main():
         screen.fill(BLACK)
         draw_lander(screen, lander)
         pygame.display.flip()
+        
         await asyncio.sleep(0)
     pygame.quit()
 
