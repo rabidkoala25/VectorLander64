@@ -10,6 +10,7 @@ SCREEN_HEIGHT = 600
 BLACK = (0,0,0)
 WHITE = (255, 255, 255)
 GREEN = (0, 255, 0)
+AMBER = (255, 255, 0)
 FRAMES_PER_SECOND = 120
 TURN_SPEED = 120  # degrees per second
 GRAVITY = 20.0  # pixels per second per second, pulling down
@@ -17,6 +18,7 @@ THRUST = 48.0
 
 START_FUEL = 1000.0
 FUEL_PER_SECOND = 70.0
+
 
 
 LANDER_PIECES = [
@@ -50,7 +52,12 @@ LANDER_PIECES = [
 def draw_lander(surface, lander):
     for shape in LANDER_PIECES:
         pygame.draw.lines(surface, GREEN, False, [place_point(point, lander) for point in shape], 2)
-        
+    if lander['thrusting']:
+        flame_length = random.uniform(5,15)
+        flame1 = [(-6, 30), (-5, 30 + flame_length), (0, 30)]
+        flame2 = [(0, 30), (5, 30 + flame_length), (6, 30)]
+        pygame.draw.lines(surface, AMBER, False, [place_point(point, lander) for point in flame1], 2)
+        pygame.draw.lines(surface, AMBER, False, [place_point(point, lander) for point in flame2], 2)
 
 #rotates lander around (0, 0)
 def rotate_point(x, y, angle_degrees):
