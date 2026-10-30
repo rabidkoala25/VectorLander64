@@ -250,7 +250,7 @@ def show_with_glow(screen, game_surface):
     small = pygame.transform.smoothscale(game_surface, (SCREEN_WIDTH // 4, SCREEN_HEIGHT // 4))
     glow = pygame.transform.smoothscale(small, (SCREEN_WIDTH, SCREEN_HEIGHT))
     screen.fill(BLACK)
-    glow.fill((140, 140, 140), special_flags=pygame.BLEND_MULT)
+    glow.fill((255, 255, 255), special_flags=pygame.BLEND_MULT)
     screen.blit(glow, (0, 0), special_flags=pygame.BLEND_ADD)
     screen.blit(game_surface, (0, 0), special_flags=pygame.BLEND_ADD)
 
