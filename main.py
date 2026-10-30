@@ -19,6 +19,11 @@ THRUST = 48.0
 START_FUEL = 1000.0
 FUEL_PER_SECOND = 70.0
 
+# landing limits: touch down slower and straighter than these, or it is a crash
+SAFE_DOWN_SPEED = 25.0  # pixels per second
+SAFE_SIDEWAYS_SPEED = 12.0
+SAFE_TILT = 10.0  # degrees from upright
+
 TERRAIN_STEP = 40 # terrain resolution
 AVERAGE_HEIGHT = 500
 HEIGHT_RANGE = 80
@@ -48,6 +53,32 @@ LANDER_PIECES = [
     [(6, 20), (10, 32), (6, 26)],  # right leg (strut + brace)
     [(8, 32), (12, 32)],  # right foot
 ]
+LEFT_FOOT = (-10, 32)
+RIGHT_FOOT = (10, 32)
+CONTACT_POINTS = [LEFT_FOOT, RIGHT_FOOT, (-12, 32), (12, 32), (-5.5, 30), (5.5, 30), (-8, -20), (8, -20), (-6, -24), (6, -24), (0, -38)]
+
+def check_touchdown(lander, points, pads):
+    touching = False
+    for point in CONTACT_POINTS:
+        x, y = place_point(point, lander)
+        if y >= ground_height_at(points, x):
+            touching = True
+    if not touching:
+        return None
+
+    left_x, _ = place_point(LEFT_FOOT, lander)
+    right_x, _ = place_point(RIGHT_FOOT, lander)
+    left_pad = pad_under(pads, left_x)
+    both_feet_on_one_pad = left_pad is not None and left_pad is pad_under(pads, right_x)
+    gentle = lander['speed_y'] <= SAFE_DOWN_SPEED and abs(lander['speed_x']) <= SAFE_SIDEWAYS_SPEED
+    upright = tilt_from_upright(lander['angle']) <= SAFE_TILT
+    if both_feet_on_one_pad and gentle and upright:
+        return ('landed', left_pad)
+    return ('crashed', None)
+
+def tilt_from_upright(angle_degrees):
+    angle = angle_degrees % 360
+    return min(angle, 360 - angle)
 
 def make_terrain():
     point_count = SCREEN_WIDTH // TERRAIN_STEP + 1
@@ -163,7 +194,6 @@ def update_lander(lander, keys, dt):
 
     
     lander['x'] %= SCREEN_WIDTH
-    lander['y'] %= SCREEN_HEIGHT
 
     
     
@@ -178,6 +208,7 @@ async def main():
     small_font = pygame.font.Font(None, 26)
     points, pads = make_terrain()
     lander = new_lander(START_FUEL)
+    message = ''  # empty while flying; set when the round ends
     running = True
     while running: 
         dt = min(clock.tick(FRAMES_PER_SECOND) / 1000, 0.05)
@@ -189,15 +220,28 @@ async def main():
             if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
                 points, pads = make_terrain()
                 lander = new_lander(START_FUEL)
+                message = ''
 
         keys = pygame.key.get_pressed()
-        update_lander(lander, keys, dt)
+        if not message:  # only fly while the round is still going
+            update_lander(lander, keys, dt)
+            result = check_touchdown(lander, points, pads)
+            if result:
+                outcome, pad = result
+                lander['thrusting'] = False
+                if outcome == 'landed':
+                    message = f"LANDED ON THE x{pad['multiplier']} PAD"
+                else:
+                    message = 'CRASHED'
 
         screen.fill(BLACK)
         draw_terrain(screen, points, pads, small_font)
         draw_lander(screen, lander)
         fuel_text = small_font.render(f"FUEL {lander['fuel']:.0f}", True, GREEN)
         screen.blit(fuel_text, (20, 20))
+        if message:
+            label = small_font.render(message + '  -  PRESS R', True, AMBER)
+            screen.blit(label, (SCREEN_WIDTH / 2 - label.get_width() / 2, 200))
         pygame.display.flip()
         
         await asyncio.sleep(0)
