@@ -210,6 +210,11 @@ async def main():
     lander = new_lander(START_FUEL)
     message = ''  # empty while flying; set when the round ends
     running = True
+
+    big_font = pygame.font.Font(None, 72)
+    state = 'title'
+    score = 0
+    high_score = 0
     while running: 
         dt = min(clock.tick(FRAMES_PER_SECOND) / 1000, 0.05)
         
@@ -217,34 +222,26 @@ async def main():
             if event.type == pygame.QUIT:
                 running = False
             # R for testing: new terrain and a new lander
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
-                points, pads = make_terrain()
-                lander = new_lander(START_FUEL)
-                message = ''
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+                elif state == 'title':
+                    state = 'playing'
+                    score = 0
+                    lander = new_lander(START_FUEL)
+                    points, pads = make_terrain()
+                elif state in ('landed', 'crashed') and event.key == pygame.K_SPACE:
+                    if lander['fuel'] <= 0:
+                        state = 'game_over'
+                    else:
+                        state = 'playing'
+                        points, pads = make_terrain()
+                        lander = new_lander(lander['fuel'])
+                elif state == 'game_over' and event.key == pygame.K_SPACE:
+                    state = 'title'
+                    
 
-        keys = pygame.key.get_pressed()
-        if not message:  # only fly while the round is still going
-            update_lander(lander, keys, dt)
-            result = check_touchdown(lander, points, pads)
-            if result:
-                outcome, pad = result
-                lander['thrusting'] = False
-                if outcome == 'landed':
-                    message = f"LANDED ON THE x{pad['multiplier']} PAD"
-                else:
-                    message = 'CRASHED'
-
-        screen.fill(BLACK)
-        draw_terrain(screen, points, pads, small_font)
-        draw_lander(screen, lander)
-        fuel_text = small_font.render(f"FUEL {lander['fuel']:.0f}", True, GREEN)
-        screen.blit(fuel_text, (20, 20))
-        if message:
-            label = small_font.render(message + '  -  PRESS R', True, AMBER)
-            screen.blit(label, (SCREEN_WIDTH / 2 - label.get_width() / 2, 200))
-        pygame.display.flip()
         
-        await asyncio.sleep(0)
     pygame.quit()
 
 asyncio.run(main())
