@@ -10,6 +10,7 @@ SCREEN_HEIGHT = 600
 BLACK = (0,0,0)
 WHITE = (255, 255, 255)
 GREEN = (0, 255, 0)
+DIM_GREEN = (0, 200, 0)
 AMBER = (255, 255, 0)
 FRAMES_PER_SECOND = 120
 TURN_SPEED = 120  # degrees per second
@@ -195,7 +196,34 @@ def update_lander(lander, keys, dt):
     
     lander['x'] %= SCREEN_WIDTH
 
-    
+# GUI
+def draw_text(surface, font, text, centre_x, y, colour=GREEN):
+    label = font.render(text, True, colour)
+    surface.blit(label, (centre_x - label.get_width() / 2, y))
+
+
+def draw_hud(surface, font, lander, points, score, high_score):
+
+    altitude = max(0, ground_height_at(points, lander['x']) - lander['y'] -32)
+
+    down_colour = AMBER if lander['speed_y'] > SAFE_DOWN_SPEED else GREEN
+    side_colour = AMBER if abs(lander['speed_x']) > SAFE_SIDEWAYS_SPEED else GREEN
+    fuel_colour = AMBER if lander['fuel'] < 200 else GREEN
+
+    readings = [
+        (f"FUEL {lander['fuel']:04.0f}", fuel_colour),
+        (f"ALT {altitude:04.0f}", GREEN),
+        (f"VX {lander['speed_x']:05.1f}", side_colour),
+        (f"Vy {lander['speed_y']:05.1f}", down_colour),
+        (f"SCORE {score:04d}", GREEN),
+        (f"HI {high_score:04d}", DIM_GREEN),
+
+    ]
+    x = 16
+    for text, colour in readings:
+        label = font.render(text, True, colour)
+        surface.blit(label, (x, 12))
+        x+= label.get_width() + 22
     
 
 async def main():
@@ -239,7 +267,36 @@ async def main():
                         lander = new_lander(lander['fuel'])
                 elif state == 'game_over' and event.key == pygame.K_SPACE:
                     state = 'title'
-                    
+
+        if state == 'playing':
+            update_lander(lander, pygame.key.get_pressed(), dt)
+            result = check_touchdown(lander, points, pads)
+            if result:
+                outcome, pad = result
+                lander['thrusting'] = False
+                message = 'LANDED' if outcome == 'landed' else 'CRASHED'
+                state = outcome  # 'landed' or 'crashed' (step 29 adds the score)
+
+        screen.fill(BLACK)
+        draw_terrain(screen, points, pads, small_font)
+
+        if state == 'title':
+            draw_text(screen, big_font, 'VECTOR LANDER', SCREEN_WIDTH / 2, 170)
+            draw_text(screen, small_font, 'PRESS ANY KEY', SCREEN_WIDTH / 2, 330, AMBER)
+        else:
+            draw_lander(screen, lander)
+            draw_hud(screen, small_font, lander, points, score, high_score)
+            if state in ('landed', 'crashed'):
+                draw_text(screen, big_font, message, SCREEN_WIDTH / 2, 200, AMBER if state == 'crashed' else GREEN)
+                hint = 'OUT OF FUEL  -  PRESS SPACE' if lander['fuel'] <= 0 else 'PRESS SPACE FOR THE NEXT ROUND'
+                draw_text(screen, small_font, hint, SCREEN_WIDTH / 2, 260)
+            if state == 'game_over':
+                draw_text(screen, big_font, 'GAME OVER', SCREEN_WIDTH / 2, 200, AMBER)
+                draw_text(screen, small_font, f'SCORE {score:04d}   PRESS SPACE', SCREEN_WIDTH / 2, 260)
+
+        pygame.display.flip()
+        await asyncio.sleep(0)
+            
 
         
     pygame.quit()
