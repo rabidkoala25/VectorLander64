@@ -3,7 +3,7 @@ import pygame
 import asyncio
 import math
 import random
-
+import array
 
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
@@ -13,15 +13,15 @@ GREEN = (0, 255, 0)
 DIM_GREEN = (0, 200, 0)
 AMBER = (255, 255, 0)
 FRAMES_PER_SECOND = 120
-TURN_SPEED = 120  # degrees per second
+TURN_SPEED = 100  # degrees per second
 GRAVITY = 20.0  # pixels per second per second, pulling down
-THRUST = 48.0
+THRUST = 64.0
 
 START_FUEL = 1500.0
 FUEL_PER_SECOND = 70.0
 
 # landing limits: touch down slower and straighter than these, or it is a crash
-SAFE_DOWN_SPEED = 25.0  # pixels per second
+SAFE_DOWN_SPEED = 30.0  # pixels per second
 SAFE_SIDEWAYS_SPEED = 12.0
 SAFE_TILT = 10.0  # degrees from upright
 
@@ -34,33 +34,64 @@ CRASH_FUEL_PENALTY = 250
 HIGH_SCORE_FILE = 'highscore.txt'
 
 LANDER_PIECES = [
-    # hull: up the left side, round the ogive nose, down the right side
     [(-6, 26), (-6, -24), (-6, -28), (-5, -32), (-3, -36), (-1, -38),
      (1, -38), (3, -36), (5, -32), (6, -28), (6, -24), (6, 26), (-6, 26)],
-    [(-4, -31), (4, -31), (4, -29), (-4, -29), (-4, -31)],  # crew window band
-    [(-2, -31), (-2, -29)],  # window divider
-    [(0, -31), (0, -29)],  # window divider
-    [(2, -31), (2, -29)],  # window divider
-    [(-6, -21), (-8, -20), (-8, -17), (-6, -16)],  # left landing-thruster pod
-    [(6, -21), (8, -20), (8, -17), (6, -16)],  # right landing-thruster pod
-    [(-6, -14), (6, -14)],  # solar band top
-    [(-6, -10), (6, -10)],  # solar band bottom
-    [(-3, -14), (-3, -10)],  # solar panel divider
-    [(0, -14), (0, -10)],  # solar panel divider
-    [(3, -14), (3, -10)],  # solar panel divider
-    [(-6, 8), (6, 8)],  # tank seam (common dome between fuel and oxidiser)
-    [(-6, 20), (6, 20)],  # aft skirt seam
-    [(-4, 26), (-5.5, 30), (-2.5, 30), (-3, 26)],  # left vacuum Raptor bell
-    [(-0.5, 26), (-1.5, 29), (1.5, 29), (0.5, 26)],  # centre sea-level Raptor
-    [(3, 26), (2.5, 30), (5.5, 30), (4, 26)],  # right vacuum Raptor bell
-    [(-6, 20), (-10, 32), (-6, 26)],  # left leg (strut + brace)
-    [(-12, 32), (-8, 32)],  # left foot
-    [(6, 20), (10, 32), (6, 26)],  # right leg (strut + brace)
-    [(8, 32), (12, 32)],  # right foot
+    [(-4, -31), (4, -31), (4, -29), (-4, -29), (-4, -31)],
+    [(-2, -31), (-2, -29)],
+    [(0, -31), (0, -29)],
+    [(2, -31), (2, -29)],
+    [(-6, -21), (-8, -20), (-8, -17), (-6, -16)],
+    [(6, -21), (8, -20), (8, -17), (6, -16)],
+    [(-6, -14), (6, -14)],
+    [(-6, -10), (6, -10)],
+    [(-3, -14), (-3, -10)],
+    [(0, -14), (0, -10)],
+    [(3, -14), (3, -10)],
+    [(-6, 8), (6, 8)],
+    [(-6, 20), (6, 20)],
+    [(-4, 26), (-5.5, 30), (-2.5, 30), (-3, 26)],
+    [(-0.5, 26), (-1.5, 29), (1.5, 29), (0.5, 26)],
+    [(3, 26), (2.5, 30), (5.5, 30), (4, 26)],
+    [(-6, 20), (-10, 32), (-6, 26)],
+    [(-12, 32), (-8, 32)],
+    [(6, 20), (10, 32), (6, 26)],
+    [(8, 32), (12, 32)],
 ]
 LEFT_FOOT = (-10, 32)
 RIGHT_FOOT = (10, 32)
 CONTACT_POINTS = [LEFT_FOOT, RIGHT_FOOT, (-12, 32), (12, 32), (-5.5, 30), (5.5, 30), (-8, -20), (8, -20), (-6, -24), (6, -24), (0, -38)]
+
+def make_sound(samples):
+    try:
+        wave = array.array('h', [int(max(-1.0, min(1.0, sample)) * 12000) for sample in samples])
+        return pygame.mixer.Sound(buffer=wave.tobytes())
+    except Exception:
+        return None
+
+def make_sounds():
+    rate = 22050
+    sounds = {}
+    rumble = []
+    level = 0.0
+    for index in range(rate // 2):
+        level = level * 0.92 + random.uniform(-1, 1) * 0.08
+        rumble.append(level * 4)
+    sounds['engine'] = make_sound(rumble)
+    sounds['beep'] = make_sound([0.5 if (index // 12) % 2 else -0.5 for index in range(rate // 10)])
+    sounds['landed'] = make_sound(
+        [0.5 * math.sin(index * 2 * math.pi * (440 if index < rate // 8 else 660) / rate) for index in range(rate // 4)]
+    )
+    length = int(rate * 0.7)
+    sounds['crash'] = make_sound([random.uniform(-1, 1) * (1 - index / length) for index in range(length)])
+    return sounds
+
+def play(sounds, name, loops=0):
+    if sounds.get(name):
+        sounds[name].play(loops=loops)
+
+def stop(sounds, name):
+    if sounds.get(name):
+        sounds[name].stop()
 
 def check_touchdown(lander, points, pads):
     touching = False
@@ -171,11 +202,9 @@ def new_lander(fuel):
         'angle': 0.0, #degrees
         'fuel': fuel,
         'thrusting': False,
-
     }
 
 def update_lander(lander, keys, dt):
-    
     if keys[pygame.K_LEFT]:
         lander['angle'] -= TURN_SPEED * dt
     if keys[pygame.K_RIGHT]:
@@ -185,18 +214,15 @@ def update_lander(lander, keys, dt):
     acceleration_x = 0.0
     acceleration_y = GRAVITY
     if lander['thrusting']:
-        
         nose_x, nose_y = rotate_point(0, -1, lander['angle'])
         acceleration_x += nose_x * THRUST
         acceleration_y += nose_y * THRUST
         lander['fuel'] = max(0.0, lander['fuel'] - FUEL_PER_SECOND * dt)
-
     
     lander['speed_x'] += acceleration_x * dt
     lander['speed_y'] += acceleration_y * dt
     lander['x'] += lander['speed_x'] * dt
     lander['y'] += lander['speed_y'] * dt
-
     
     lander['x'] %= SCREEN_WIDTH
 
@@ -208,7 +234,6 @@ def load_high_score():
     except (OSError, ValueError):
         return 0
 
-
 def save_high_score(score):
     try:
         with open(HIGH_SCORE_FILE, 'w') as file:
@@ -216,14 +241,11 @@ def save_high_score(score):
     except OSError:
         pass
 
-
 def draw_text(surface, font, text, centre_x, y, colour=GREEN):
     label = font.render(text, True, colour)
     surface.blit(label, (centre_x - label.get_width() / 2, y))
 
-
 def draw_hud(surface, font, lander, points, score, high_score):
-
     altitude = max(0, ground_height_at(points, lander['x']) - lander['y'] -32)
 
     down_colour = AMBER if lander['speed_y'] > SAFE_DOWN_SPEED else GREEN
@@ -237,7 +259,6 @@ def draw_hud(surface, font, lander, points, score, high_score):
         (f"Vy {lander['speed_y']:05.1f}", down_colour),
         (f"SCORE {score:04d}", GREEN),
         (f"HI {high_score:04d}", DIM_GREEN),
-
     ]
     x = 16
     for text, colour in readings:
@@ -245,18 +266,66 @@ def draw_hud(surface, font, lander, points, score, high_score):
         surface.blit(label, (x, 12))
         x+= label.get_width() + 22
     
-
-def show_with_glow(screen, game_surface):
-    small = pygame.transform.smoothscale(game_surface, (SCREEN_WIDTH // 4, SCREEN_HEIGHT // 4))
+def show_with_glow(screen, game_surface, scanlines):
+    small = pygame.transform.smoothscale(game_surface, (SCREEN_WIDTH // 3, SCREEN_HEIGHT // 3))
     glow = pygame.transform.smoothscale(small, (SCREEN_WIDTH, SCREEN_HEIGHT))
     screen.fill(BLACK)
     glow.fill((255, 255, 255), special_flags=pygame.BLEND_MULT)
     screen.blit(glow, (0, 0), special_flags=pygame.BLEND_ADD)
+    
     screen.blit(game_surface, (0, 0), special_flags=pygame.BLEND_ADD)
+    screen.blit(game_surface, (0, 0), special_flags=pygame.BLEND_ADD)
+    screen.blit(scanlines, (0, 0))
 
+def make_scanlines():
+    lines = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    for y in range (0, SCREEN_HEIGHT, 3):
+        pygame.draw.line(lines, (0, 0, 0, 90), (0, y), (SCREEN_WIDTH, y))
+    return lines
+
+def make_explosion(lander):
+    pieces = []
+    for shape in LANDER_PIECES:
+        for start, end in zip(shape, shape[1:]):
+            start_x, start_y = place_point(start, lander)
+            end_x, end_y = place_point(end, lander)
+            pieces.append({
+                'x': (start_x + end_x) / 2,
+                'y': (start_y + end_y) / 2,
+                'half_x': (end_x - start_x) / 2,
+                'half_y': (end_y - start_y) / 2,
+                'speed_x': random.uniform(-90, 90),
+                'speed_y': random.uniform(-160, -40),
+                'spin': random.uniform(-400, 400),
+            })
+    return pieces
+
+def update_explosion(pieces, points, dt):
+    for piece in pieces:
+        piece['speed_y'] += GRAVITY * 2 * dt
+        piece['x'] += piece['speed_x'] * dt
+        piece['y'] += piece['speed_y'] * dt
+        piece['half_x'], piece['half_y'] = rotate_point(piece['half_x'], piece['half_y'], piece['spin'] * dt)
+        ground = ground_height_at(points, piece['x'] % SCREEN_WIDTH)
+        if piece['y'] > ground:
+            piece['y'] = ground
+            piece['speed_x'] = piece['speed_y'] = piece['spin'] = 0
+
+def draw_explosion(surface, pieces):
+    for piece in pieces:
+        start = (piece['x'] - piece['half_x'], piece['y'] - piece['half_y'])
+        end = (piece['x'] + piece['half_x'], piece['y'] + piece['half_y'])
+        pygame.draw.line(surface, GREEN, start, end, 2)
 
 async def main():
     pygame.init()
+    
+    try:
+        pygame.mixer.init(frequency=22050, size=-16, channels=1)
+    except pygame.error:
+        pass
+    sounds = make_sounds() if pygame.mixer.get_init() else {}
+
     random.seed(1)  # same terrain every run, for testing - delete for the real game
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     game_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -273,6 +342,14 @@ async def main():
     state = 'title'
     score = 0
     high_score = load_high_score()
+
+    scanlines = make_scanlines()
+
+    pieces = []
+    
+    engine_playing = False
+    beep_timer = 0.0
+
     while running: 
         dt = min(clock.tick(FRAMES_PER_SECOND) / 1000, 0.05)
         
@@ -297,25 +374,51 @@ async def main():
                         lander = new_lander(lander['fuel'])
                 elif state == 'game_over' and event.key == pygame.K_SPACE:
                     state = 'title'
+                    pieces = []
 
         if state == 'playing':
             update_lander(lander, pygame.key.get_pressed(), dt)
+            
+            if lander['thrusting'] and not engine_playing:
+                play(sounds, 'engine', loops=-1)
+                engine_playing = True
+            elif not lander['thrusting'] and engine_playing:
+                stop(sounds, 'engine')
+                engine_playing = False
+            
+            beep_timer -= dt
+            if 0 < lander['fuel'] < 200 and beep_timer <= 0:
+                play(sounds, 'beep')
+                beep_timer = 1.0
+
             result = check_touchdown(lander, points, pads)
             if result:
                 outcome, pad = result
                 lander['thrusting'] = False
+                stop(sounds, 'engine')
+                engine_playing = False
+
                 if outcome == 'landed':
+                    play(sounds, 'landed')
                     gained = LANDING_POINTS * pad['multiplier']
                     score += gained
                     message = f"LANDED   +{gained}"
                     state = 'landed'
+                    play(sounds, 'landed')
+                
                 else:
+                    play(sounds, 'crash')
                     lander['fuel'] = max(0.0, lander['fuel'] - CRASH_FUEL_PENALTY)
                     message = 'CRASHED'
                     state = 'crashed'
+                    pieces = make_explosion(lander)
+                    play(sounds, 'crash')
+                
                 if score > high_score:
                     high_score = score
                     save_high_score(high_score)
+        elif state == 'crashed':
+            update_explosion(pieces, points, dt)
 
         game_surface.fill(BLACK)
         draw_terrain(game_surface, points, pads, small_font)
@@ -323,6 +426,8 @@ async def main():
         if state == 'title':
             draw_text(game_surface, big_font, 'VECTOR LANDER', SCREEN_WIDTH / 2, 170)
             draw_text(game_surface, small_font, 'PRESS ANY KEY', SCREEN_WIDTH / 2, 330, AMBER)
+        elif state == 'crashed':
+            draw_explosion(game_surface, pieces)
         else:
             draw_lander(game_surface, lander)
             draw_hud(game_surface, small_font, lander, points, score, high_score)
@@ -334,12 +439,15 @@ async def main():
                 draw_text(game_surface, big_font, 'GAME OVER', SCREEN_WIDTH / 2, 200, AMBER)
                 draw_text(game_surface, small_font, f'SCORE {score:04d}   PRESS SPACE', SCREEN_WIDTH / 2, 260)
 
-        show_with_glow(screen, game_surface)
+        show_with_glow(screen, game_surface, scanlines)
         pygame.display.flip()
         await asyncio.sleep(0)
             
-
-        
     pygame.quit()
 
 asyncio.run(main())
+
+
+
+
+
