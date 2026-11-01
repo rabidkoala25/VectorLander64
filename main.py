@@ -61,6 +61,16 @@ LEFT_FOOT = (-10, 32)
 RIGHT_FOOT = (10, 32)
 CONTACT_POINTS = [LEFT_FOOT, RIGHT_FOOT, (-12, 32), (12, 32), (-5.5, 30), (5.5, 30), (-8, -20), (8, -20), (-6, -24), (6, -24), (0, -38)]
 
+FLIP_BONUS = 100  
+CANISTER_FUEL = 200
+
+
+MOONS = [
+    {'name': 'THE MOON', 'gravity': 20.0, 'wind': 0.0},
+    {'name': 'MARS', 'gravity': 32.0, 'wind': 0.0},  # real Mars is 2.3x the Moon: toned down so the engine still wins
+    {'name': 'TITAN', 'gravity': 17.0, 'wind': 14.0},  # thick air, gusty
+]
+
 def make_sound(samples):
     try:
         wave = array.array('h', [int(max(-1.0, min(1.0, sample)) * 12000) for sample in samples])
@@ -153,7 +163,7 @@ def draw_terrain(surface, points, pads, font):
         surface.blit(label, ((pad['left'] + pad['right']) / 2 - label.get_width() / 2, pad['height'] + 8))
             
 def ground_height_at(points, x):
-    """The terrain's screen y at any x, between the points (linear interpolation)."""
+    
     x = max(0, min(SCREEN_WIDTH, x))
     index = min(int(x // TERRAIN_STEP), len(points) - 2)
     left_x, left_height = points[index]
@@ -163,7 +173,6 @@ def ground_height_at(points, x):
 
 
 def pad_under(pads, x):
-    """The pad at this x, or None."""
     for pad in pads:
         if pad['left'] <= x <= pad['right']:
             return pad
@@ -193,15 +202,18 @@ def place_point(point, lander):
     turned_x, turned_y = rotate_point(point[0], point[1], lander['angle'])
     return (lander['x'] + turned_x, lander['y'] + turned_y)
 
-def new_lander(fuel):
+def new_lander(fuel, moon):
     return {
         'x': random.uniform(150, SCREEN_WIDTH - 150),
         'y': 60.0,
         'speed_x': random.uniform(-30, 30),
         'speed_y': 0.0,
-        'angle': 0.0, #degrees
+        'angle': 0.0,  # degrees, 0 = upright
         'fuel': fuel,
         'thrusting': False,
+        'gravity': moon['gravity'],
+        'wind': random.uniform(-moon['wind'], moon['wind']),  
+        'turned': 0.0,  
     }
 
 def update_lander(lander, keys, dt):
@@ -211,8 +223,8 @@ def update_lander(lander, keys, dt):
         lander['angle'] += TURN_SPEED * dt
 
     lander['thrusting'] = keys[pygame.K_UP] and lander['fuel'] > 0
-    acceleration_x = 0.0
-    acceleration_y = GRAVITY
+    acceleration_x = lander['wind']
+    acceleration_y = lander['gravity']
     if lander['thrusting']:
         nose_x, nose_y = rotate_point(0, -1, lander['angle'])
         acceleration_x += nose_x * THRUST
@@ -319,6 +331,14 @@ def draw_explosion(surface, pieces):
         end = (piece['x'] + piece['half_x'], piece['y'] + piece['half_y'])
         pygame.draw.line(surface, GREEN, start, end, 2)
 
+def start_round(fuel):
+    
+    moon = random.choice(MOONS)
+    points, pads = make_terrain()
+    lander = new_lander(fuel, moon)
+    canister = make_canister(points)
+    return moon, points, pads, lander, canister
+
 async def main():
     pygame.init()
     
@@ -335,8 +355,7 @@ async def main():
     clock = pygame.time.Clock()
 
     small_font = pygame.font.Font(None, 26)
-    points, pads = make_terrain()
-    lander = new_lander(START_FUEL)
+    moon, points, pads, lander, canister = start_round(START_FUEL)
     message = ''  # empty while flying; set when the round ends
     running = True
 
