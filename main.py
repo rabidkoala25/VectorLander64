@@ -17,7 +17,7 @@ TURN_SPEED = 100
 GRAVITY = 20.0
 THRUST = 64.0
 
-START_FUEL = 1500.0
+START_FUEL = 5000.0
 FUEL_PER_SECOND = 70.0
 
 SAFE_DOWN_SPEED = 30.0
@@ -30,6 +30,11 @@ HEIGHT_RANGE = 80
 
 LANDING_POINTS = 50
 CRASH_FUEL_PENALTY = 250
+FLIP_BONUS = 100
+CANISTER_FUEL = 500
+CANISTER_WIDTH = 16
+CANISTER_HEIGHT = 22
+PICKUP_DISTANCE = 30
 HIGH_SCORE_FILE = 'highscore.txt'
 
 LANDER_PIECES = [
@@ -325,11 +330,50 @@ def draw_explosion(surface, pieces):
         end = (piece['x'] + piece['half_x'], piece['y'] + piece['half_y'])
         pygame.draw.line(surface, GREEN, start, end, 2)
 
+def make_canister(points):
+    canister_x = random.uniform(60, SCREEN_WIDTH - 60)
+    ground_y = ground_height_at(points, canister_x)
+    highest_y = 120
+    lowest_y = ground_y - 70
+    canister_y = random.uniform(highest_y, lowest_y)
+    canister = {
+        'x': canister_x,
+        'y': canister_y,
+        'collected': False,
+    }
+    return canister
+
+
+def draw_canister(surface, canister, font):
+    if canister['collected']:
+        return
+    left = canister['x'] - CANISTER_WIDTH / 2
+    top = canister['y'] - CANISTER_HEIGHT / 2
+    pygame.draw.rect(surface, AMBER, (left, top, CANISTER_WIDTH, CANISTER_HEIGHT), 2)
+    cap_left = left + 4
+    cap_right = left + CANISTER_WIDTH - 4
+    cap_y = top - 3
+    pygame.draw.line(surface, AMBER, (cap_left, cap_y), (cap_right, cap_y), 2)
+    draw_text(surface, font, 'F', canister['x'], top + 3, AMBER)
+
+
+def touching_canister(lander, canister):
+    if canister['collected']:
+        return False
+    distance_x = lander['x'] - canister['x']
+    distance_y = lander['y'] - canister['y']
+    distance = math.sqrt(distance_x * distance_x + distance_y * distance_y)
+    if distance < PICKUP_DISTANCE:
+        return True
+    return False
+
+
 def start_round(fuel):
     moon = random.choice(MOONS)
     points, pads = make_terrain()
     lander = new_lander(fuel, moon)
-    return moon, points, pads, lander
+    canister = make_canister(points)
+    return moon, points, pads, lander, canister
 
 async def main():
     pygame.init()
@@ -347,7 +391,7 @@ async def main():
     clock = pygame.time.Clock()
 
     small_font = pygame.font.Font(None, 26)
-    moon, points, pads, lander = start_round(START_FUEL)
+    moon, points, pads, lander, canister = start_round(START_FUEL)
     message = ''
     running = True
 
@@ -375,19 +419,24 @@ async def main():
                 elif state == 'title':
                     state = 'playing'
                     score = 0
-                    moon, points, pads, lander = start_round(START_FUEL)
+                    moon, points, pads, lander, canister = start_round(START_FUEL)
                 elif state in ('landed', 'crashed') and event.key == pygame.K_SPACE:
                     if lander['fuel'] <= 0:
                         state = 'game_over'
                     else:
                         state = 'playing'
-                        moon, points, pads, lander = start_round(lander['fuel'])
+                        moon, points, pads, lander, canister = start_round(lander['fuel'])
                 elif state == 'game_over' and event.key == pygame.K_SPACE:
                     state = 'title'
                     pieces = []
 
         if state == 'playing':
             update_lander(lander, pygame.key.get_pressed(), dt)
+
+            if touching_canister(lander, canister):
+                lander['fuel'] = lander['fuel'] + CANISTER_FUEL
+                canister['collected'] = True
+                play(sounds, 'beep')
             
             if lander['thrusting'] and not engine_playing:
                 play(sounds, 'engine', loops=-1)
@@ -412,9 +461,12 @@ async def main():
 
                 if outcome == 'landed':
                     play(sounds, 'landed')
-                    gained = LANDING_POINTS * pad['multiplier']
+                    flips = int(abs(lander['angle']) // 360)
+                    gained = LANDING_POINTS * pad['multiplier'] + flips * FLIP_BONUS
                     score += gained
                     message = f"LANDED   +{gained}"
+                    if flips > 0:
+                        message += f"   {flips}x FLIP"
                     state = 'landed'
                 
                 else:
@@ -440,6 +492,8 @@ async def main():
             if state == 'crashed':
                 draw_explosion(game_surface, pieces)
             else:
+                if state == 'playing':
+                    draw_canister(game_surface, canister, small_font)
                 draw_lander(game_surface, lander)
             draw_hud(game_surface, small_font, lander, points, score, high_score)
             draw_text(game_surface, small_font, moon['name'], SCREEN_WIDTH / 2, 40, DIM_GREEN)
@@ -464,5 +518,5 @@ asyncio.run(main())
 
 
 
-
+# 
 
