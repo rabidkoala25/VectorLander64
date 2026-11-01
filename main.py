@@ -223,7 +223,8 @@ def update_lander(lander, keys, dt):
     lander['speed_y'] += acceleration_y * dt
     lander['x'] += lander['speed_x'] * dt
     lander['y'] += lander['speed_y'] * dt
-    
+
+
     lander['x'] %= SCREEN_WIDTH
 
 # GUI
@@ -259,6 +260,7 @@ def draw_hud(surface, font, lander, points, score, high_score):
         (f"Vy {lander['speed_y']:05.1f}", down_colour),
         (f"SCORE {score:04d}", GREEN),
         (f"HI {high_score:04d}", DIM_GREEN),
+    
     ]
     x = 16
     for text, colour in readings:
@@ -395,8 +397,10 @@ async def main():
             if result:
                 outcome, pad = result
                 lander['thrusting'] = False
-                stop(sounds, 'engine')
-                engine_playing = False
+                
+                if engine_playing:
+                    stop(sounds, 'engine')
+                    engine_playing = False
 
                 if outcome == 'landed':
                     play(sounds, 'landed')
@@ -404,7 +408,6 @@ async def main():
                     score += gained
                     message = f"LANDED   +{gained}"
                     state = 'landed'
-                    play(sounds, 'landed')
                 
                 else:
                     play(sounds, 'crash')
@@ -412,7 +415,6 @@ async def main():
                     message = 'CRASHED'
                     state = 'crashed'
                     pieces = make_explosion(lander)
-                    play(sounds, 'crash')
                 
                 if score > high_score:
                     high_score = score
