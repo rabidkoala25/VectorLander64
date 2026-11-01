@@ -13,17 +13,16 @@ GREEN = (0, 255, 0)
 DIM_GREEN = (0, 200, 0)
 AMBER = (255, 255, 0)
 FRAMES_PER_SECOND = 120
-TURN_SPEED = 100  # degrees per second
-GRAVITY = 20.0  # pixels per second per second, pulling down
+TURN_SPEED = 100
+GRAVITY = 20.0
 THRUST = 64.0
 
 START_FUEL = 1500.0
 FUEL_PER_SECOND = 70.0
 
-# landing limits: touch down slower and straighter than these, or it is a crash
-SAFE_DOWN_SPEED = 30.0  # pixels per second
+SAFE_DOWN_SPEED = 30.0
 SAFE_SIDEWAYS_SPEED = 12.0
-SAFE_TILT = 10.0  # degrees from upright
+SAFE_TILT = 10.0
 
 TERRAIN_STEP = 40 # terrain resolution
 AVERAGE_HEIGHT = 500
@@ -61,14 +60,10 @@ LEFT_FOOT = (-10, 32)
 RIGHT_FOOT = (10, 32)
 CONTACT_POINTS = [LEFT_FOOT, RIGHT_FOOT, (-12, 32), (12, 32), (-5.5, 30), (5.5, 30), (-8, -20), (8, -20), (-6, -24), (6, -24), (0, -38)]
 
-FLIP_BONUS = 100  
-CANISTER_FUEL = 200
-
-
 MOONS = [
     {'name': 'THE MOON', 'gravity': 20.0, 'wind': 0.0},
-    {'name': 'MARS', 'gravity': 32.0, 'wind': 0.0},  # real Mars is 2.3x the Moon: toned down so the engine still wins
-    {'name': 'TITAN', 'gravity': 17.0, 'wind': 14.0},  # thick air, gusty
+    {'name': 'MARS', 'gravity': 32.0, 'wind': 0.0},
+    {'name': 'TITAN', 'gravity': 17.0, 'wind': 14.0},
 ]
 
 def make_sound(samples):
@@ -139,12 +134,12 @@ def make_terrain():
     pad_sizes = [(3, 2), (2, 3), (1, 5)]
     random.shuffle(pad_sizes)
     pads = []
-    zone_width = point_count // len(pad_sizes)  # one pad in each third of the screen
+    zone_width = point_count // len(pad_sizes)
     for zone, (steps, multiplier) in enumerate(pad_sizes):
         start = zone * zone_width + random.randint(1, max(1, zone_width - steps - 2))
         pad_height = heights[start]
         for index in range(start, start + steps + 1):
-            heights[index] = pad_height  # flatten it
+            heights[index] = pad_height
         pads.append({
             'left': start * TERRAIN_STEP,
             'right': (start + steps) * TERRAIN_STEP,
@@ -208,12 +203,11 @@ def new_lander(fuel, moon):
         'y': 60.0,
         'speed_x': random.uniform(-30, 30),
         'speed_y': 0.0,
-        'angle': 0.0,  # degrees, 0 = upright
+        'angle': 0.0,
         'fuel': fuel,
         'thrusting': False,
         'gravity': moon['gravity'],
-        'wind': random.uniform(-moon['wind'], moon['wind']),  
-        'turned': 0.0,  
+        'wind': random.uniform(-moon['wind'], moon['wind']),
     }
 
 def update_lander(lander, keys, dt):
@@ -332,12 +326,10 @@ def draw_explosion(surface, pieces):
         pygame.draw.line(surface, GREEN, start, end, 2)
 
 def start_round(fuel):
-    
     moon = random.choice(MOONS)
     points, pads = make_terrain()
     lander = new_lander(fuel, moon)
-    canister = make_canister(points)
-    return moon, points, pads, lander, canister
+    return moon, points, pads, lander
 
 async def main():
     pygame.init()
@@ -348,15 +340,15 @@ async def main():
         pass
     sounds = make_sounds() if pygame.mixer.get_init() else {}
 
-    random.seed(1)  # same terrain every run, for testing - delete for the real game
+    random.seed(1)
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     game_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption('VectorLander64')
     clock = pygame.time.Clock()
 
     small_font = pygame.font.Font(None, 26)
-    moon, points, pads, lander, canister = start_round(START_FUEL)
-    message = ''  # empty while flying; set when the round ends
+    moon, points, pads, lander = start_round(START_FUEL)
+    message = ''
     running = True
 
     big_font = pygame.font.Font(None, 72)
@@ -377,22 +369,19 @@ async def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            # R for testing: new terrain and a new lander
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
                 elif state == 'title':
                     state = 'playing'
                     score = 0
-                    lander = new_lander(START_FUEL)
-                    points, pads = make_terrain()
+                    moon, points, pads, lander = start_round(START_FUEL)
                 elif state in ('landed', 'crashed') and event.key == pygame.K_SPACE:
                     if lander['fuel'] <= 0:
                         state = 'game_over'
                     else:
                         state = 'playing'
-                        points, pads = make_terrain()
-                        lander = new_lander(lander['fuel'])
+                        moon, points, pads, lander = start_round(lander['fuel'])
                 elif state == 'game_over' and event.key == pygame.K_SPACE:
                     state = 'title'
                     pieces = []
@@ -447,11 +436,16 @@ async def main():
         if state == 'title':
             draw_text(game_surface, big_font, 'VECTOR LANDER', SCREEN_WIDTH / 2, 170)
             draw_text(game_surface, small_font, 'PRESS ANY KEY', SCREEN_WIDTH / 2, 330, AMBER)
-        elif state == 'crashed':
-            draw_explosion(game_surface, pieces)
         else:
-            draw_lander(game_surface, lander)
+            if state == 'crashed':
+                draw_explosion(game_surface, pieces)
+            else:
+                draw_lander(game_surface, lander)
             draw_hud(game_surface, small_font, lander, points, score, high_score)
+            draw_text(game_surface, small_font, moon['name'], SCREEN_WIDTH / 2, 40, DIM_GREEN)
+            if abs(lander['wind']) >= 1:
+                arrows = ('>' if lander['wind'] > 0 else '<') * max(1, round(abs(lander['wind']) / 4))
+                draw_text(game_surface, small_font, f'WIND {arrows}', SCREEN_WIDTH / 2, 62, DIM_GREEN)
             if state in ('landed', 'crashed'):
                 draw_text(game_surface, big_font, message, SCREEN_WIDTH / 2, 200, AMBER if state == 'crashed' else GREEN)
                 hint = 'OUT OF FUEL  -  PRESS SPACE' if lander['fuel'] <= 0 else 'PRESS SPACE FOR THE NEXT ROUND'
