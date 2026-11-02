@@ -368,6 +368,25 @@ def touching_canister(lander, canister):
     return False
 
 
+def record_frame(recording, lander):
+    frame = (lander['x'], lander['y'], lander['angle'])
+    recording.append(frame)
+
+
+def draw_ghost(surface, ghost, frame_number):
+    if len(ghost) == 0:
+        return
+    if frame_number >= len(ghost):
+        frame_number = len(ghost) - 1
+    ghost_x, ghost_y, ghost_angle = ghost[frame_number]
+    ghost_lander = {'x': ghost_x, 'y': ghost_y, 'angle': ghost_angle}
+    for shape in LANDER_PIECES:
+        shape_points = []
+        for point in shape:
+            shape_points.append(place_point(point, ghost_lander))
+        pygame.draw.lines(surface, DIM_GREEN, False, shape_points, 1)
+
+
 def start_round(fuel):
     moon = random.choice(MOONS)
     points, pads = make_terrain()
@@ -392,6 +411,9 @@ async def main():
 
     small_font = pygame.font.Font(None, 26)
     moon, points, pads, lander, canister = start_round(START_FUEL)
+    recording = []
+    best_ghost = []
+    best_landing = 0
     message = ''
     running = True
 
@@ -420,18 +442,21 @@ async def main():
                     state = 'playing'
                     score = 0
                     moon, points, pads, lander, canister = start_round(START_FUEL)
+                    recording = []
                 elif state in ('landed', 'crashed') and event.key == pygame.K_SPACE:
                     if lander['fuel'] <= 0:
                         state = 'game_over'
                     else:
                         state = 'playing'
                         moon, points, pads, lander, canister = start_round(lander['fuel'])
+                        recording = []
                 elif state == 'game_over' and event.key == pygame.K_SPACE:
                     state = 'title'
                     pieces = []
 
         if state == 'playing':
             update_lander(lander, pygame.key.get_pressed(), dt)
+            record_frame(recording, lander)
 
             if touching_canister(lander, canister):
                 lander['fuel'] = lander['fuel'] + CANISTER_FUEL
@@ -467,6 +492,9 @@ async def main():
                     message = f"LANDED   +{gained}"
                     if flips > 0:
                         message += f"   {flips}x FLIP"
+                    if gained > best_landing:
+                        best_landing = gained
+                        best_ghost = recording
                     state = 'landed'
                 
                 else:
@@ -494,6 +522,7 @@ async def main():
             else:
                 if state == 'playing':
                     draw_canister(game_surface, canister, small_font)
+                    draw_ghost(game_surface, best_ghost, len(recording))
                 draw_lander(game_surface, lander)
             draw_hud(game_surface, small_font, lander, points, score, high_score)
             draw_text(game_surface, small_font, moon['name'], SCREEN_WIDTH / 2, 40, DIM_GREEN)
@@ -514,9 +543,7 @@ async def main():
             
     pygame.quit()
 
-asyncio.run(main())
+asyncio.run(main()) # make this async thing work
 
 
-
-# 
 
