@@ -8,7 +8,7 @@ made with pygame and deployed in github using async
 
 ## Play it
 
-
+https://rabidkoala25.github.io/VectorLander64/ 
 
 ![alt text](image.png)
 
