@@ -12,17 +12,18 @@ WHITE = (255, 255, 255)
 GREEN = (0, 255, 0)
 DIM_GREEN = (0, 200, 0)
 AMBER = (255, 255, 0)
+GHOST_GREEN = (0, 90, 0)
 FRAMES_PER_SECOND = 120
-TURN_SPEED = 100
+TURN_SPEED = 120
 GRAVITY = 20.0
-THRUST = 64.0
+THRUST = 84.0
 
-START_FUEL = 5000.0
-FUEL_PER_SECOND = 70.0
+START_FUEL = 2000.0
+FUEL_PER_SECOND = 50.0
 
 SAFE_DOWN_SPEED = 30.0
-SAFE_SIDEWAYS_SPEED = 12.0
-SAFE_TILT = 10.0
+SAFE_SIDEWAYS_SPEED = 15.0
+SAFE_TILT = 15.0
 
 TERRAIN_STEP = 40 # terrain resolution
 AVERAGE_HEIGHT = 500
@@ -31,7 +32,7 @@ HEIGHT_RANGE = 80
 LANDING_POINTS = 50
 CRASH_FUEL_PENALTY = 250
 FLIP_BONUS = 100
-CANISTER_FUEL = 500
+CANISTER_FUEL = 300
 CANISTER_WIDTH = 16
 CANISTER_HEIGHT = 22
 PICKUP_DISTANCE = 30
@@ -384,7 +385,7 @@ def draw_ghost(surface, ghost, frame_number):
         shape_points = []
         for point in shape:
             shape_points.append(place_point(point, ghost_lander))
-        pygame.draw.lines(surface, DIM_GREEN, False, shape_points, 1)
+        pygame.draw.lines(surface, GHOST_GREEN, False, shape_points, 1)
 
 
 def start_round(fuel):
@@ -403,7 +404,6 @@ async def main():
         pass
     sounds = make_sounds() if pygame.mixer.get_init() else {}
 
-    random.seed(1)
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     game_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption('VectorLander64')
@@ -450,6 +450,7 @@ async def main():
                         state = 'playing'
                         moon, points, pads, lander, canister = start_round(lander['fuel'])
                         recording = []
+                        pieces = []
                 elif state == 'game_over' and event.key == pygame.K_SPACE:
                     state = 'title'
                     pieces = []
@@ -507,7 +508,7 @@ async def main():
                 if score > high_score:
                     high_score = score
                     save_high_score(high_score)
-        elif state == 'crashed':
+        elif state == 'crashed' or state == 'game_over':
             update_explosion(pieces, points, dt)
 
         game_surface.fill(BLACK)
@@ -517,7 +518,7 @@ async def main():
             draw_text(game_surface, big_font, 'VECTOR LANDER', SCREEN_WIDTH / 2, 170)
             draw_text(game_surface, small_font, 'PRESS ANY KEY', SCREEN_WIDTH / 2, 330, AMBER)
         else:
-            if state == 'crashed':
+            if state == 'crashed' or (state == 'game_over' and len(pieces) > 0):
                 draw_explosion(game_surface, pieces)
             else:
                 if state == 'playing':
@@ -543,7 +544,7 @@ async def main():
             
     pygame.quit()
 
-asyncio.run(main()) # make this async thing work
+asyncio.run(main()) # make this async thing work .......................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
 
 
 
